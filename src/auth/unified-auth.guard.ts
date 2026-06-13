@@ -18,7 +18,7 @@ export class UnifiedAuthGuard implements CanActivate {
             if (gameSecret !== this.configService.get('ROBLOX_GAME_SECRET')) {
                 throw new UnauthorizedException('Invalid game secret');
             }
-            const robloxId = request.body.robloxId ?? request.params.robloxId;
+            const robloxId = request.headers['x-roblox-id'];
             if (!robloxId) {
                 throw new UnauthorizedException('robloxId is required');
             }

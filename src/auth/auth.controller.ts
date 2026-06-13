@@ -1,19 +1,14 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { AuthCredentialsDto } from './dto/auth-credentials.dto';
 import { AuthService } from './auth.service';
-import { SignInDto } from './dto/sign-in.dto';
+import { RobloxAuthDto } from './dto/roblox-auth.dto';
+import { Authenticated } from './authenticated.object';
 
 @Controller('auth')
 export class AuthController {
+    constructor(private authService: AuthService) {}
 
-    constructor(private authService : AuthService) {}
-    @Post('signUp')
-    signUp(@Body() authCredentialsDto : AuthCredentialsDto){
-        return this.authService.signUp(authCredentialsDto);
-    }
-
-    @Post('signIn')
-    signIn(@Body() signInDto : SignInDto) : Promise<{accessToken: string}> {
-        return this.authService.signIn(signInDto);
+    @Post('roblox')
+    robloxAuth(@Body() robloxAuthDto: RobloxAuthDto): Promise<Authenticated> {
+        return this.authService.robloxAuth(robloxAuthDto);
     }
 }

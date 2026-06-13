@@ -1,3 +1,3 @@
 export class JwtPayload {
-    username!: string;
+    robloxId!: string;
 }

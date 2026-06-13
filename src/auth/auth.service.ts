@@ -1,63 +1,66 @@
-import { ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { UsersRepository } from './users.repository';
-import { AuthCredentialsDto } from './dto/auth-credentials.dto';
-import * as bcrypt from 'bcrypt'
-import { SignInDto } from './dto/sign-in.dto';
-import { User } from './user.entity';
+import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { JwtPayload } from './jwt.payload.object';
+import { firstValueFrom } from 'rxjs';
+import { UsersRepository } from './users.repository';
 import { Authenticated } from './authenticated.object';
+import { JwtPayload } from './jwt.payload.object';
+import { RobloxAuthDto } from './dto/roblox-auth.dto';
 
 @Injectable()
 export class AuthService {
-
     constructor(
-        private usersRepository : UsersRepository,
-        private jwtService: JwtService
+        private usersRepository: UsersRepository,
+        private jwtService: JwtService,
+        private httpService: HttpService,
+        private configService: ConfigService,
     ) {}
 
-    async signUp(authCredentialsDto : AuthCredentialsDto) : Promise<Authenticated> {//how is this calling the repository direcly with zero checks??
-        //well dto is already checking if we have only two props username and password and if they checks out, that's all I need
-
-        const user: User = await this.usersRepository.createUser(authCredentialsDto);
-        
-        return this.getAuthenticatedData(user.username);
+    async robloxAuth(robloxAuthDto: RobloxAuthDto): Promise<Authenticated> {
+        const robloxId = await this.getRobloxId(robloxAuthDto);
+        await this.usersRepository.findOrCreateByRobloxId(robloxId);
+        return {
+            robloxId,
+            accessToken: await this.getAccessToken(robloxId),
+        };
     }
 
-    async getAuthenticatedData(usenrname: string) : Promise<Authenticated> {
-        const accessToken = await this.getAccessToken(usenrname);
-        return{
-            username: usenrname,
-            accessToken: accessToken
+    private async getRobloxId(robloxAuthDto: RobloxAuthDto): Promise<string> {
+        const { code, codeVerifier, redirectUri } = robloxAuthDto;
+
+        try {
+            const tokenResponse = await firstValueFrom(
+                this.httpService.post(
+                    'https://apis.roblox.com/oauth/v1/token',
+                    new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code,
+                        code_verifier: codeVerifier,
+                        redirect_uri: redirectUri,
+                        client_id: this.configService.get('ROBLOX_CLIENT_ID'),
+                        client_secret: this.configService.get('ROBLOX_CLIENT_SECRET'),
+                    }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+                ),
+            );
+
+            const accessToken = tokenResponse.data.access_token;
+
+            const userInfoResponse = await firstValueFrom(
+                this.httpService.get('https://apis.roblox.com/oauth/v1/userinfo', {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                }),
+            );
+
+            return String(userInfoResponse.data.sub);
+        } catch {
+            throw new UnauthorizedException('Roblox authentication failed');
         }
     }
 
-    async getAccessToken(username: string) : Promise<string> {
-        const payload : JwtPayload = {username};
-        const accessToken: string = await this.jwtService.sign(payload);
-        return accessToken;
-    }
-
-
-
-    async signIn(signInDto : SignInDto) : Promise<Authenticated> { //will return a token
-        const {username , password} = signInDto;
-        let user : User | null
-        try{
-           user = await this.usersRepository.getUserByUsername(username); 
-
-        }catch(error){
-            if (error instanceof NotFoundException){
-                throw new NotFoundException("Username doesn't exist.");
-            }
-            throw new InternalServerErrorException();
-        }
-        
-        const isPasswordCorrect = await bcrypt.compare( password,user.password)
-        if (!isPasswordCorrect){
-            throw new UnauthorizedException("Check your credentials");
-        }
-        
-        return this.getAuthenticatedData(username);
+    private async getAccessToken(robloxId: string): Promise<string> {
+        const payload: JwtPayload = { robloxId };
+        return this.jwtService.sign(payload);
     }
 }

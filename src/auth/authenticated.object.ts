@@ -1,4 +1,4 @@
 export class Authenticated {
-    username!: string;
-    accessToken!: string
+    robloxId!: string;
+    accessToken!: string;
 }

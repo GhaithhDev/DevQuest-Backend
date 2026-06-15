@@ -27,6 +27,6 @@ import { UnifiedAuthGuard } from './unified-auth.guard';
   ],
   controllers: [AuthController],
   providers: [AuthService, UsersRepository, JwtStrategy, UnifiedAuthGuard],
-  exports: [JwtStrategy, PassportModule, UsersRepository, UnifiedAuthGuard],
+  exports: [JwtStrategy, PassportModule, UsersRepository, UnifiedAuthGuard, JwtModule],
 })
 export class AuthModule {}
